@@ -42,7 +42,7 @@
     <!-- Modern, actively maintained SMTP client (Microsoft's recommended
          replacement for the obsolete System.Net.Mail.SmtpClient). Validates
          server certificates by default and supports STARTTLS/implicit TLS. -->
-    <PackageReference Include="MailKit" Version="4.16.0" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
   </ItemGroup>
 
 </Project>
