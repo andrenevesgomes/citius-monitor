@@ -1,0 +1,48 @@
+# ---- .NET / Visual Studio build output ----
+bin/
+obj/
+publish/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+*.dll
+*.exe
+*.pdb
+
+# ---- IDE / editor ----
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# ---- Test / coverage ----
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+*.trx
+
+# ---- Generated reports (never commit runtime output / possible personal data) ----
+reports/
+*.xlsx
+
+# ---- Secrets & local config (defense in depth: never commit credentials) ----
+*.env
+.env*
+appsettings.*.json
+!appsettings.json
+secrets.json
+*.pfx
+*.p12
+*.key
+*.pem
+
+# ---- OS noise ----
+Thumbs.db
+Desktop.ini
+.DS_Store
