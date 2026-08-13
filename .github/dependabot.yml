@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Keep NuGet dependencies patched.
+  - package-ecosystem: nuget
+    directory: "/src/CitiusMonitor"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Keep GitHub Actions pinned versions up to date.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"

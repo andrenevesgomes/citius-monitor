@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <AssemblyName>Citius</AssemblyName>
+    <RootNamespace>CitiusMonitor</RootNamespace>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Product metadata (shown in the .exe file properties). -->
+    <Product>Citius Monitor</Product>
+    <Description>Read-only monitor of the Citius court-distribution portal.</Description>
+    <Version>1.1.0</Version>
+    <NeutralLanguage>en</NeutralLanguage>
+
+    <!-- Quality gates: treat the codebase as production software. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+
+    <!-- Supply-chain hardening: restore exactly the versions in the lockfile. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
+    <!-- One-file, nothing-to-install output for end users:
+         dotnet publish -c Release
+         produces a single Citius.exe (no .NET runtime needed on their PC). -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Familiar NuGet for real .xlsx workbooks (multi-sheet, Portuguese labels). -->
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <!-- Modern, actively maintained SMTP client (Microsoft's recommended
+         replacement for the obsolete System.Net.Mail.SmtpClient). Validates
+         server certificates by default and supports STARTTLS/implicit TLS. -->
+    <PackageReference Include="MailKit" Version="4.16.0" />
+  </ItemGroup>
+
+</Project>

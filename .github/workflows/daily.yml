@@ -1,0 +1,143 @@
+name: Daily monitor
+
+# Runs the monitor on a schedule (nothing runs on anyone's PC) and posts the
+# result to Microsoft Teams. The webhook URL is provided as an encrypted repo
+# secret (Settings -> Secrets and variables -> Actions -> New repository secret):
+#
+#     Name:  CITIUS_TEAMS_WEBHOOK_URL
+#     Value: <your Power Automate "Workflows" webhook URL>
+#
+# You can also trigger it by hand from the Actions tab ("Run workflow"), where
+# you may enter a custom date range (e.g. to showcase a historical match).
+
+on:
+  schedule:
+    # Target 08:00 in Lisbon all year. GitHub cron is UTC only and has no DST,
+    # so we fire at BOTH 07:00 and 08:00 UTC and let the "gate" job below allow
+    # only the run that lands on 08:00 Europe/Lisbon
+    # (WEST = UTC+1 in summer, WET = UTC in winter).
+    - cron: "0 7 * * 1-5"
+    - cron: "0 8 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      date_from:
+        description: "Data inicial DD-MM-YYYY (vazio = ontem)"
+        required: false
+        type: string
+      date_to:
+        description: "Data final DD-MM-YYYY (vazio = hoje)"
+        required: false
+        type: string
+
+# Least privilege: only needs to read the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-monitor
+  cancel-in-progress: false
+
+jobs:
+  # Enforce exactly 08:00 Europe/Lisbon for scheduled runs (see cron note above).
+  # Manual (workflow_dispatch) runs always proceed.
+  gate:
+    name: Schedule gate
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - name: Allow only the 08:00 Lisbon trigger
+        id: check
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_EVENT_NAME -ne 'schedule') {
+            "proceed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          $tz = [System.TimeZoneInfo]::FindSystemTimeZoneById('Europe/Lisbon')
+          $lisbon = [System.TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, $tz)
+          Write-Host "Lisbon local time: $lisbon"
+          $proceed = ($lisbon.Hour -eq 8)
+          "proceed=$($proceed.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if (-not $proceed) { Write-Host 'Not 08:00 in Lisbon - skipping this trigger.' }
+
+  monitor:
+    name: Search & notify
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore (locked mode)
+        run: dotnet restore --locked-mode
+
+      - name: Build (analyzers, warnings-as-errors)
+        run: dotnet build -c Release --no-restore
+
+      - name: Run monitor and post to Teams
+        id: run
+        shell: pwsh
+        env:
+          # Optional: defendant to watch for (falls back to a placeholder).
+          CITIUS_TARGET_DEFENDANT: ${{ secrets.CITIUS_TARGET_DEFENDANT }}
+          # Secret is injected only into this step's environment; it is never
+          # printed and never written to the repository.
+          CITIUS_TEAMS_WEBHOOK_URL: ${{ secrets.CITIUS_TEAMS_WEBHOOK_URL }}
+          # Optional @mentions when a match is found: "Name=aad-id-or-upn" pairs
+          # separated by ';', e.g. "André Gomes=andre.gomes@example.com".
+          CITIUS_TEAMS_MENTIONS: ${{ secrets.CITIUS_TEAMS_MENTIONS }}
+          # Email (optional): enabled only when host + recipients are configured.
+          # The report is attached automatically. Add these as repository secrets.
+          CITIUS_SMTP_HOST: ${{ secrets.CITIUS_SMTP_HOST }}
+          CITIUS_SMTP_PORT: ${{ secrets.CITIUS_SMTP_PORT }}
+          CITIUS_SMTP_USER: ${{ secrets.CITIUS_SMTP_USER }}
+          CITIUS_SMTP_PASSWORD: ${{ secrets.CITIUS_SMTP_PASSWORD }}
+          CITIUS_SMTP_FROM: ${{ secrets.CITIUS_SMTP_FROM }}
+          CITIUS_SMTP_STARTTLS: ${{ secrets.CITIUS_SMTP_STARTTLS }}
+          CITIUS_EMAIL_TO: ${{ secrets.CITIUS_EMAIL_TO }}
+          # Optional custom range from the "Run workflow" form (empty on schedule).
+          INPUT_DATE_FROM: ${{ github.event.inputs.date_from }}
+          INPUT_DATE_TO: ${{ github.event.inputs.date_to }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CITIUS_TEAMS_WEBHOOK_URL)) {
+            Write-Error "Missing secret CITIUS_TEAMS_WEBHOOK_URL. Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          }
+          $cliArgs = @('--no-prompt')
+          if (-not [string]::IsNullOrWhiteSpace($env:INPUT_DATE_FROM)) { $cliArgs += @('--from', $env:INPUT_DATE_FROM) }
+          if (-not [string]::IsNullOrWhiteSpace($env:INPUT_DATE_TO))   { $cliArgs += @('--to',   $env:INPUT_DATE_TO) }
+          Write-Host "Args: $($cliArgs -join ' ')"
+          & '.\src\CitiusMonitor\bin\Release\net10.0\win-x64\Citius.exe' @cliArgs
+          $code = $LASTEXITCODE
+          Write-Host "Citius exit code: $code"
+          # 0 OK, 2 PARTIAL (isolated court failures) -> treat as success;
+          # 3 FAILED -> fail the job so it surfaces in the Actions tab.
+          if ($code -ge 3) { exit $code }
+          exit 0
+
+      - name: Collect Excel report
+        if: always()
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:USERPROFILE 'Documents\Citius Monitor\reports'
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          if (Test-Path $dir) { Copy-Item "$dir\*.xlsx" artifacts\ -Force }
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: citius-report
+          path: artifacts/*.xlsx
+          if-no-files-found: warn
+          retention-days: 30
