@@ -11,13 +11,15 @@ name: Daily monitor
 # you may enter a custom date range (e.g. to showcase a historical match).
 
 on:
-  schedule:
+  # schedule:
     # Target 08:00 in Lisbon all year. GitHub cron is UTC only and has no DST,
     # so we fire at BOTH 07:00 and 08:00 UTC and let the "gate" job below allow
     # only the run that lands on 08:00 Europe/Lisbon
     # (WEST = UTC+1 in summer, WET = UTC in winter).
-    - cron: "0 7 * * 1-5"
-    - cron: "0 8 * * 1-5"
+    
+    # - cron: "0 7 * * 1-5"
+    # - cron: "0 8 * * 1-5"
+  
   workflow_dispatch:
     inputs:
       date_from:
